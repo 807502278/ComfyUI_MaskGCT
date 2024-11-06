@@ -1,0 +1,12 @@
+json5
+ruamel_yaml
+pyopenjtalk
+pykakasi
+jieba
+cn2an
+pypinyin
+unidecode
+inflect
+LangSegment
+
+# typeguard>=4.0.1
