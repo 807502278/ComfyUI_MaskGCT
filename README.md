@@ -59,7 +59,7 @@ models
                 │   └── model.safetensors
                 └── t2s_model
                     └── model.safetensors
-`
+```
 
 ## Known Issues
 ### Errors
