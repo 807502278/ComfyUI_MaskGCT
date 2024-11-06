@@ -46,21 +46,20 @@ models
         │       ├── model.safetensors
         │       └── preprocessor_config.json
         └── amphion
-            └── amphion-large-v3-turbo
-                └── MaskGCT
-                    ├── acoustic_codec
-                    │   ├── model.safetensors
-                    │   └── model_1.safetensors
-                    ├── s2a_model
-                    │   ├── s2a_model_1layer
-                    │   │   └── model.safetensors
-                    │   └── s2a_model_full
-                    │       └── model.safetensors
-                    ├── semantic_codec
-                    │   └── model.safetensors
-                    └── t2s_model
-                        └── model.safetensors
-```
+            └── MaskGCT
+                ├── acoustic_codec
+                │   ├── model.safetensors
+                │   └── model_1.safetensors
+                ├── s2a_model
+                │   ├── s2a_model_1layer
+                │   │   └── model.safetensors
+                │   └── s2a_model_full
+                │       └── model.safetensors
+                ├── semantic_codec
+                │   └── model.safetensors
+                └── t2s_model
+                    └── model.safetensors
+`
 
 ## Known Issues
 ### Errors
