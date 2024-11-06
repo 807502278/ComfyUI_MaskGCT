@@ -22,9 +22,11 @@ windows download [espeak-ng-X64.msi](https://github.com/espeak-ng/espeak-ng/rele
 ## Model Download
 The model will automatically be downloaded from the source to the comfyui/models/maskgct directory.
 
-If you need to download the model manually, please organize the files as per the following structure:
+If you need to download the model manually, please organize the files as per the following structure.
+
 Note: When downloading individual files manually, the name of config.json may change.
-Download link (please download while preserving the original project folder structure):
+Download link (If you keep the original project folder structure during download, then you don't have to compare the files.
+):
 
 [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo/tree/main)
 
