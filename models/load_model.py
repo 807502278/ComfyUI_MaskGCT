@@ -24,6 +24,8 @@ ESPEAK_DLL = os.path.join(OBJECT_DIR, 'dll/libespeak-ng.dll')  # espeak-ng dll f
 ESPEAK_DIR = os.path.join(OBJECT_DIR, 'dll/') 
 MODELS_DIR = os.path.join(dir_up_level(_path, 4), "models/maskgct")
 
+MODELS_JIEBA= os.path.join(OBJECT_DIR,'models/jieba')
+
 def load_model_list(repo_id, file_list: list, local_dir=MODELS_DIR, revision: str = None, object_dir=False):
     """
      Download the file list of the specified Hugging Face project to a local directory (preserving the original directory structure, 

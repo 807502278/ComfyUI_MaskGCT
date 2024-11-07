@@ -5,8 +5,7 @@ import os
 import sys
 
 load_path = os.path.dirname(__file__)
-if load_path not in sys.path:
-    sys.path.insert(0, load_path)
+if load_path not in sys.path: sys.path.insert(0, load_path)
 
 extension_folder = os.path.dirname(os.path.realpath(__file__))
 NODE_CLASS_MAPPINGS = {}

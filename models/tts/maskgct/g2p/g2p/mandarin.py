@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os
 import re
 import jieba
 import cn2an
@@ -10,7 +11,9 @@ from pypinyin import lazy_pinyin, BOPOMOFO
 from typing import List
 from models.tts.maskgct.g2p.g2p.chinese_model_g2p import BertPolyPredict
 from models.tts.maskgct.g2p.utils.front_utils import *
-import os
+
+from models.load_model import MODELS_JIEBA
+jieba.dt.tmp_dir = MODELS_JIEBA
 
 # from g2pw import G2PWConverter
 
