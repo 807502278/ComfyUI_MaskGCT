@@ -30,6 +30,7 @@ Waiting for updates:
 2. streamlined node.
 3. Change **jieba.cache** from system disk to plugin folder.
 4. Update node description
+5. Update workflow, The old workflow will no longer be usable
 
 2024/11/06: 
 1. First submission
