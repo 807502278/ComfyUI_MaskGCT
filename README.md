@@ -29,6 +29,7 @@ Waiting for updates:
 1. Unlimited text length.
 2. streamlined node.
 3. Change **jieba.cache** from system disk to plugin folder.
+4. Update node description
 
 2024/11/06: 
 1. First submission
@@ -74,7 +75,7 @@ Waiting for updates:
   -Batch_Text: List of text after long text cutting.
 
 6. **MaskGCT Setting**\
-  MaskGCT参数设置(若不连接则使用默认参数)。\
+  MaskGCTParameter settings (default parameters will be used if not connected).\
   model parameter: \
   -maskgct_* prefixed parameters correspond to the configuration of the MaskGCT model.\
   -w2vbert_* prefixed parameters correspond to the configuration of the W2VBert model.\
@@ -93,7 +94,7 @@ Waiting for updates:
 #### Convert_txt
 
 7. **Speech Recognition-whisper_large_v3**\
-  简单的使用whisper-large-v3-turbo模型进行语音文字。
+  Simple use of the whisper-large-v3-turbo model for speech-to-text.
 #### Audio_Edit
 8. **Audio Resampling**\
   Adjust the audio sampling rate, whether to resample \
