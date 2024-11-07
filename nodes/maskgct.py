@@ -23,6 +23,7 @@ import py3langid
 import folder_paths
 import logging
 import re
+from tqdm import tqdm
 
 # logfile_dir = os.path.join(folder_paths.base_path, "comfyui.log")
 device_list = get_device_list()
@@ -65,10 +66,48 @@ def obtain_language(text: str, supported_languages=None):
     return (language, supported)
 
 
+# Slice text into fragments, input text and maximum length, return fragment list and combined fragment list.
+# 切分文本为片段，输入文本和最大长度，返回片段列表和组合的片段列表
+def slice_combination(text, length=100, language=None):
+    character_ratio = {"en": 1, "zh": 0.6,
+                       "ja": 1.3, "fr": 1.5, "ko": 1, "de": 1.75}
+    if language is None:
+        language = py3langid.classify(text)[0]
+    if language not in character_ratio.keys():
+        language = "en"
+        logging.warning(
+            "Warning-MaskGCT-Slice_Combination: language not supported, use default language 'en' instead")
+    length = int(length * character_ratio[language])
+    if len(text) <= length:
+        return ([text], [text])
+    else:
+        pattern = r'(?<=[，,。.！!\n])'
+        fragments = re.split(pattern, text)
+        # remove empty fragments
+        fragments = [frag for frag in fragments if frag]
+        n = len((fragments))
+        if n == 1:
+            return ([text], [text])
+        elif n == 2:
+            return (fragments, fragments)
+        else:
+            result = []
+            combined = ""
+            for i in range(n):
+                combined += fragments[i]
+                if len(combined) >= length:
+                    result.append(combined)
+                    combined = ""
+                elif i == n - 1:
+                    result.append(combined)
+    return (fragments, result)
+
+
 CATEGORY_NAME = "MaskGCT/MaskGCT_Load"
 
 
 class load_maskgct_model:
+    DESCRIPTION = """Load or automatically download maskgct_model"""
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -141,6 +180,7 @@ class load_maskgct_model:
 
 
 class load_w2vbert_model:
+    DESCRIPTION = """Load or automatically download w2vbert_model"""
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -165,28 +205,44 @@ class load_w2vbert_model:
 
 
 class maskgct_pipeline:
+    DESCRIPTION = """
+        MaskGCT Preprocessing Pipeline
+        Parameters: 
+        -maskgct_model: MaskGCT model.
+        -w2vbert_model: W2V-BERT model.
+        -sample_audio: Audio sample.
+        -sample_prompt_text: Text corresponding to the audio sample.
+        -sample_language: Language of the audio sample.
+        -device: Device to run on.
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "maskgct_model": ("maskgct_model",),
                 "w2vbert_model": ("w2vbert_model",),
+                "sample_audio": ("AUDIO",),
+                "sample_prompt_text": ("STRING", {"default": "", }),
+                "sample_language": (["Auto", "en", "zh", "ja", "fr", "ko", "de",], {"default": "Auto"}),
                 "device": (list(device_list[0].keys()), {"default": str(device_list[1])}),
-            },
-            "optional": {
             }
         }
     CATEGORY = CATEGORY_NAME
     RETURN_TYPES = ("maskgct_pipeline",)
     RETURN_NAMES = ("maskgct_pipeline",)
-    FUNCTION = "pipeline"
+    FUNCTION = "mc_pipeline"
 
-    def pipeline(self, maskgct_model, w2vbert_model, device):
+    def mc_pipeline(self, maskgct_model, w2vbert_model,
+                    sample_audio, sample_prompt_text, sample_language,
+                    device):
+        # Unified equipment 统一设备
         device = device_list[0][device]
         for i in maskgct_model:
             i.to(device)
         for i in w2vbert_model:
             i.to(device)
+
+        # MaskGCT_Pipeline
         pipeline = MaskGCT_Inference_Pipeline(
             w2vbert_model[0],
             *maskgct_model,
@@ -194,27 +250,10 @@ class maskgct_pipeline:
             w2vbert_model[2],
             device,
         )
-        return (pipeline,)
 
-
-class sample_audio:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "audio": ("AUDIO",),
-                "prompt_text": ("STRING", {"default": "", }),
-                "language": (["Auto", "en", "zh", "ja", "fr", "ko", "de",], {"default": "Auto"}),
-            },
-        }
-    CATEGORY = CATEGORY_NAME
-    RETURN_TYPES = ("audio_pipe",)
-    RETURN_NAMES = ("sample_audio",)
-    FUNCTION = "audio_sample"
-
-    def audio_sample(self, audio, prompt_text, language):
-        sample_rate = audio["sample_rate"]
-        waveform = audio_to_numpy(audio)
+        # Audio sample preprocessing 音频样本预处理
+        sample_rate = sample_audio["sample_rate"]
+        waveform = audio_to_numpy(sample_audio)
         if sample_rate != 16000:
             waveform_16k = librosa.resample(
                 waveform, orig_sr=sample_rate, target_sr=16000)
@@ -226,33 +265,43 @@ class sample_audio:
         else:
             waveform_24k = waveform
 
-        if language == "Auto":
-            language = py3langid.classify(prompt_text)[0]
-            if not language in ["en", "zh", "ja", "fr", "ko", "de"]:
+        if sample_language == "Auto":
+            sample_language = py3langid.classify(sample_prompt_text)[0]
+            if not sample_language in ["en", "zh", "ja", "fr", "ko", "de"]:
                 logging.error(
                     "Error-MaskGCT-Sample_Audio: language not supported!", exc_info=True)
-        return ([waveform_16k, waveform_24k, prompt_text, language],)
+        return ([pipeline, [waveform_16k, waveform_24k, sample_prompt_text, sample_language]],)
 
 
 class from_path_load_audio:
+    DESCRIPTION = """
+    Load audio files from a specified path.
+    Output:
+    -Audio: Audio data.
+    -Time(s): Time in seconds.
+    -Sample: Sampling rate in Hertz.
+    -Channel: Number of channels.
+    """
     @classmethod
     def INPUT_TYPES(s):
-        path=os.path.join(folder_paths.base_path, "custom_nodes/ComfyUI_MaskGCT/sample/trump_0.wav")
+        path = os.path.join(folder_paths.base_path,
+                            "custom_nodes/ComfyUI_MaskGCT/sample/trump_0.wav")
         return {
             "required": {
-                "Audio_FilePath": ("STRING",{"default": path}),
+                "Audio_FilePath": ("STRING", {"default": path}),
             },
         }
     CATEGORY = CATEGORY_NAME
     RETURN_TYPES = ("AUDIO", "INT", "FLOAT")
-    RETURN_NAMES = ("Audio", "Sample", "Time(s)")
+    RETURN_NAMES = ("Audio", "Sample", "Time(s)","channel")
     FUNCTION = "load_audio_v2"
 
     def load_audio_v2(self, Audio_FilePath):
         audio_tensor, sr = torchaudio.load(Audio_FilePath)
         time = audio_tensor.shape[-1]/sr
         audio_tensor = audio_tensor.unsqueeze(0)
-        return ({"waveform": audio_tensor, "sample_rate": sr}, sr, time,)
+        channel = audio_tensor.shape[1]
+        return ({"waveform": audio_tensor, "sample_rate": sr}, sr, time,channel)
 
 
 CATEGORY_NAME = "MaskGCT"
@@ -260,133 +309,189 @@ CATEGORY_NAME = "MaskGCT"
 
 class maskgct_run_v2:
     DESCRIPTION = """
-    When target_len is 0, the length is automatically calculated.
-    Note: If target_len exceeds the length corresponding to normal speaking speed, 
-        the first half of the audio may become garbled.
-
-    target_len长度为 0 时，自动计算长度。
-    注意：target_len超过正常语速时的长度时，音频前半部分会出现乱码。
+    Run MaskGCT to generate speech.
+        Parameters: 
+            -maskgct_pipeline: MaskGCT preprocessing pipeline.
+            -target_text: Text for generating speech, with no length limit.
+            -language: The language for generating speech should match the text language (supports 6 languages), 
+                it is recommended to use Auto for automatic recognition.
+            -settings: Optional MaskGCT parameter settings.
+        Output: 
+            -Audio: Generated speech.
+            -Audio_List: List of audio after long text cutting.
+            -Batch_Text: List of text after long text cutting.
+    说明: 基于MaskGCT模型的语音生成。
+        输入：
+        运行MaskGCT生成语音.
+        参数: 
+            -maskgct_pipeline: MaskGCT预处理管线。
+            -target_text: 用于生成语音的文本，没有长度限制。
+            -language: 生成语音的语言应与文本语言对应(支持6种语言),建议使用Auto自动识别。
+            -settings: 可选MaskGCT参数设置。
+        输出: 
+            -Audio: 生成的语音。
+            -Audio_List: 长文本切割后的音频列表。
+            -Batch_Text: 长文本切割后的文本列表。
     """
 
     @classmethod
     def INPUT_TYPES(s):
-        wav_path = os.path.join(OBJECT_DIR, "sample/trump_0.wav")
         return {
-            "required": {
-                "maskgct_pipeline": ("maskgct_pipeline",),
-                "sample_audio": ("audio_pipe",),
-                "target_text": ("STRING", {"default": "We do not break. We never give in. We never back down.",
-                                           "multiline": True}),
-                "language": (["Auto", "en", "zh", "ja", "fr", "ko", "de",], {"default": "Auto"}),
-                "target_len": ("INT", {"default": 0, "min": 0, "max": 99999}),
-            },
-            "optional": {
-                "maskgct_setting": ("maskgct_setting",),
-                "w2vbert_setting": ("w2vbert_setting",)
+                "required": {
+                    "maskgct_pipeline": ("maskgct_pipeline",),
+                    "target_text": ("STRING", {"default": "We do not break. We never give in. We never back down.",
+                                               "multiline": True}),
+                    "language": (["Auto", "en", "zh", "ja", "fr", "ko", "de",], {"default": "Auto"}),
+                },
+                "optional": {
+                    "setting": ("maskgct_setting",),
+                }
             }
-        }
     CATEGORY = CATEGORY_NAME
-    RETURN_TYPES = ("AUDIO",)
-    RETURN_NAMES = ("AUDIO",)
+    RETURN_TYPES = ("AUDIO", "AUDIO", "STRING")
+    RETURN_NAMES = ("Audio", "Audio_List", "Batch_Text")
     FUNCTION = "maskgct_semantic"
 
     def maskgct_semantic(self,
                          maskgct_pipeline,
-                         sample_audio,
                          target_text,
                          language,
-                         target_len,
-                         maskgct_setting=None,
-                         w2vbert_setting=None,
+                         setting=None,
                          ):
-        # speech_16k = librosa.load(sample_wav_path, sr=16000)[0]
-        if target_len == 0:
-            target_len = None
+
+        # Set default values 设置默认值
+        if setting == None:
+            ms = [25, 2.5, 0.75, [25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], 2.5, 0.75]
+            target_len, text_slice_length, pause_time = [0, 120, 0.7]
+        else:
+            ms = setting[0]
+            target_len, text_slice_length, pause_time = setting[1]
         if language == "Auto":
             language = py3langid.classify(target_text)[0]
             if not language in ["en", "zh", "ja", "fr", "ko", "de"]:
                 logging.error(
                     "Error-Maskgct_run_v2: language not supported!", exc_info=True)
-        if maskgct_setting == None:
-            maskgct_setting = [25, 2.5, 0.75]
-        if w2vbert_setting == None:
-            w2vbert_setting = [
-                [25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], 2.5, 0.75]
 
-        recovered_audio = maskgct_pipeline.maskgct_inference(
-            [sample_audio[0], sample_audio[1]],
-            sample_audio[2],
-            target_text,
-            sample_audio[3],
-            language,
-            target_len,
-            *maskgct_setting,
-            *w2vbert_setting
-        )
-        recovered_audio = torch.Tensor(recovered_audio, device="cpu")
-        recovered_audio = recovered_audio.repeat(1, 1, 1)
-        return ({"waveform": recovered_audio, "sample_rate": 24000},)
+        # Split Text 切分文本
+        if isinstance(target_text, list):
+            text_list = target_text
+        else:
+            _, text_list = slice_combination(
+                target_text, text_slice_length, language)
+        if target_len == 0 or len(text_list) > 1:
+            target_len = None
+
+        # Generate fragmented audio from segmented text 通过切分的文本生成片段音频
+        audio_list = []
+        audio_data_list = []
+        sample_audio = maskgct_pipeline[1]
+        for i in tqdm(text_list):
+            recovered_audio = maskgct_pipeline[0].maskgct_inference(
+                [sample_audio[0], sample_audio[1]],
+                sample_audio[2],
+                i,
+                sample_audio[3],
+                language,
+                target_len,
+                *ms
+            )
+            recovered_audio = torch.Tensor(recovered_audio, device="cpu")
+            recovered_audio = recovered_audio.repeat(1, 1, 1)
+            audio_data_list.append(recovered_audio)
+
+        # Prepare for output 准备输出
+        if len(audio_data_list) == 1:
+            merged_audio = {
+                "waveform": audio_data_list[0], "sample_rate": 24000}
+            audio_list = recovered_audio
+        else:
+            pause_time = 0.5
+            pause_audio = torch.zeros(1, 1, int(pause_time*24000), device="cpu")
+            audio_data_list_pause = []
+            for i in range(len(audio_data_list)):
+                # Composite audio list 合成音频列表
+                audio_list.append(
+                    {"waveform": audio_data_list[i], "sample_rate": 24000})
+                # Synthesize audio data list and add pauses 合成音频数据列表，并增加停顿
+                audio_data_list_pause.append(audio_data_list[i])
+                if text_list[i][-1] in [".", "!", "?", "。", "！", "？", "\n"]:
+                    audio_data_list_pause.append(pause_audio)
+            merged_audio = {"waveform": torch.cat(
+                audio_data_list_pause, dim=2), "sample_rate": 24000}
+        return (merged_audio, audio_list, text_list)
 
 
 class maskgct_setting:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "n_time_steps": ("INT", {"default": 25, "min": 1, "max": 99999}),
-                "cfg": ("FLOAT", {"default": 2.5, "min": 0.01, "max": 50.0, "step": 0.01}),
-                "rescale_cfg": ("FLOAT", {"default": 0.75, "min": 0.01, "max": 10.0, "step": 0.01}),
-            },
-        }
-    CATEGORY = CATEGORY_NAME
-    RETURN_TYPES = ("maskgct_setting",)
-    RETURN_NAMES = ("maskgct_setting",)
-    FUNCTION = "setting"
-
-    def setting(self, n_time_steps, cfg, rescale_cfg):
-        return ([n_time_steps, cfg, rescale_cfg],)
-
-
-class w2vbert_setting:
     DESCRIPTION = """
         explain:
-        n_time_steps is a list that contains 12 elements, 
-            corresponding to the n_time_steps at 12 different positions.
-        You do not need to input it; by default, it uses [25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1].
-        If you wish to make fine adjustments,
-            You can also use my ComfyUI-3D-MeshTool plugin to generate the n_time_steps for w2vbert.
-        说明:
-        n_time_steps是一个列表，包含12个元素，分别对应12个位置的n_time_steps。
-        可以不输入，默认使用[25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        如果你想精细的调整，可以使用 ComfyUI-3D-MeshTool 插件来生成w2vbert的n_time_steps后输入
-    """
+            1. Model Parameters:
+                maskgct_* prefixed parameters correspond to the configuration of the MaskGCT model.
+                w2vbert_* prefixed parameters correspond to the configuration of the W2VBert model.
+                    w2vbert_time_steps is an optional parameter that is a list containing 12 elements, 
+                        each corresponding to the n_time_steps at 12 different positions.
+                    It can be left blank, and will default to [25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1].
+                    If you want to fine-tune, you can use the ComfyUI-3D-MeshTool plugin to integrate w2vbert_time_steps.
+            2. Text Parameters:
+                target_len:The length of each output audio segment, 0 indicates automatic calculation. 
+                    This parameter is invalid when slicing is in effect.
+                text_slice_length: The length of the text slice, default is 120 English characters, 
+                    the slice ratio will be automatically adjusted for different languages.
+                pause_time: The pause time between each sentence (period, exclamation mark, question mark), 
+                    default is 0.5 seconds.
 
+        说明:
+            1.模型参数：
+                maskgct_* 前缀的参数对应MaskGCT模型的配置。
+                w2vbert_* 前缀的参数对应W2VBert模型的配置。
+                    w2vbert_time_steps可选参数是一个列表,包含12个元素,分别对应12个位置的n_time_steps
+                    可不输入，将默认使用[25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                    如果你想精细的调整，可以使用 ComfyUI-3D-MeshTool 插件来接入w2vbert_time_steps
+            2.文本参数：
+                target_len: 输出的每段音频长度,0表示自动计算。文本切片生效时该参数无效。
+                text_slice_length: 文本切片的长度,默认120英文字符,0不切片,不同语言会自动调整切片比例。
+                pause_time: 每句话(以句号、感叹号、问号区分)之间的停顿时间,默认0.5秒。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {
-                "cfg": ("FLOAT", {"default": 2.5, "min": 0.01, "max": 50.0, "step": 0.01}),
-                "rescale_cfg": ("FLOAT", {"default": 0.75, "min": 0.01, "max": 10.0, "step": 0.01}),
-            },
-            "optional": {
-                "n_time_steps": ("LIST",),
+                "required": {
+                    "maskgct_time_steps": ("INT", {"default": 25, "min": 1, "max": 99999}),
+                    "maskgct_cfg": ("FLOAT", {"default": 2.5, "min": 0.01, "max": 50.0, "step": 0.01}),
+                    "maskgct_rescale_cfg": ("FLOAT", {"default": 0.75, "min": 0.01, "max": 10.0, "step": 0.01}),
+                    "w2vbert_cfg": ("FLOAT", {"default": 2.5, "min": 0.01, "max": 50.0, "step": 0.01}),
+                    "w2vbert_rescale_cfg": ("FLOAT", {"default": 0.75, "min": 0.01, "max": 10.0, "step": 0.01}),
+                    "target_len": ("INT", {"default": 0, "min": 0, "max": 99999}),
+                    "text_slice_length": ("INT", {"default": 120, "min": 0, "max": 8192, "step": 1}),
+                    "pause_time": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 4.0, "step": 0.01, "display": "slider"})
+                },
+                "optional": {
+                    "w2vbert_time_steps": ("LIST",),
+                }
             }
-        }
     CATEGORY = CATEGORY_NAME
-    RETURN_TYPES = ("w2vbert_setting",)
-    RETURN_NAMES = ("w2vbert_setting",)
+    RETURN_TYPES = ("maskgct_setting",)
+    RETURN_NAMES = ("setting",)
     FUNCTION = "setting"
 
-    def setting(self, cfg, rescale_cfg, n_time_steps=None):
-        if n_time_steps == None:
-            n_time_steps = [25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        return ([n_time_steps, cfg, rescale_cfg],)
+    def setting(self, maskgct_time_steps, maskgct_cfg, maskgct_rescale_cfg, w2vbert_cfg, w2vbert_rescale_cfg,
+                target_len, text_slice_length, pause_time,
+                w2vbert_time_steps=None):
+        if w2vbert_time_steps == None:
+            w2vbert_time_steps = [25, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        return ([
+                [maskgct_time_steps, maskgct_cfg, maskgct_rescale_cfg, w2vbert_time_steps, w2vbert_cfg, w2vbert_rescale_cfg],
+                [target_len, text_slice_length, pause_time]
+                ],)
 
 
 CATEGORY_NAME = "MaskGCT/Convert_txt"
 
 
 class whisper_large_v3:
+    DESCRIPTION = """
+    Simple use of the whisper-large-v3-turbo model for speech-to-text.
+    简单的使用whisper-large-v3-turbo模型进行语音文字。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -430,6 +535,17 @@ CATEGORY_NAME = "MaskGCT/Audio_Edit"
 
 
 class audio_resample:
+    DESCRIPTION = """
+    Adjust the audio sampling rate, whether to resample 
+    (not resampling can adjust the audio speed, but the frequency will change).
+        Parameters: 
+        -sample: Target sampling rate, range 1 - 4MHz
+        -resample: Whether to resample.
+    调整音频采样率，是否重采样(不重采样可调整音频速度，但是频率会变)。
+        参数: 
+        -sample: 目标采样率,范围 1 - 4MHz
+        -resample: 是否重采样。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -446,7 +562,7 @@ class audio_resample:
 
     def audio_sampling(self, audio, sample, re_sample):
         audio_sample = audio["sample_rate"]
-        if audio_sample != sample :
+        if audio_sample != sample:
             audio_data = audio["waveform"]
             if isinstance(audio_data, torch.Tensor) and re_sample:
                 audio_data = res.resample(audio_data, audio_sample, sample)
@@ -466,6 +582,16 @@ class audio_resample:
 
 
 class audio_capture_percentage:
+    DESCRIPTION = """
+    Trim audio from the beginning and end by percentage.
+    Parameters:
+      -start: Start percentage.
+      -end: End percentage.\
+    从开始和结尾按百分比截取音频。
+        参数: 
+        -start: 开始百分比。
+        -end: 结尾百分比。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -501,6 +627,23 @@ class audio_capture_percentage:
 
 
 class get_audio_data:
+    DESCRIPTION = """
+    Retrieve audio data.
+        Output:
+        -sample: Sampling rate.
+        -Time(s): Audio duration in seconds.
+        -channel: Number of channels.
+        -batch_size: Number of audio batches.
+        -Data_Length: Length of audio data.
+
+    获取音频数据。
+        输出: 
+        -sample: 采样率。
+        -Time(s): 音频时长(秒)。
+        -channel: 通道数。
+        -bath_size: 音频批次数量。
+        -Data_Length: 音频数据长度。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -509,18 +652,38 @@ class get_audio_data:
             },
         }
     CATEGORY = CATEGORY_NAME
-    RETURN_TYPES = ("INT", "FLOAT", "INT")
-    RETURN_NAMES = ("sample", "Time(s)", "Length(samples)")
+    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", "INT")
+    RETURN_NAMES = ("sample", "channel", "bath_size", "Time(s)", "Data_Length")
     FUNCTION = "audio_get_data"
 
     def audio_get_data(self, audio):
         audio_data = audio["waveform"]
+        channel = audio_data.shape[1]
+        bath_size = audio_data.shape[0]
         n = audio_data.shape[-1]
         time = n/audio["sample_rate"]
-        return (audio["sample_rate"], time, n)
+        return (audio["sample_rate"],channel, bath_size,time, n)
 
 
 class get_text_data:
+    DESCRIPTION = """
+    Retrieve language text data.
+        Output:
+        -language: Detected language.
+        -character_length: Character length.
+        -words: Array of segmented word strings.
+        -words_number: Number of words.
+        -symbols: Array of segmented symbol strings.
+        -symbols_number: Number of symbols.
+    获取语言文本数据。
+        输出: 
+        -language: 识别出的语言。
+        -character_length: 字符长度。
+        -words: 分割的单词字符串数组。
+        -words_number: 单词数量。
+        -symbols: 分割的符号字符串数组。
+        -symbols_number: 符号数量。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -529,22 +692,32 @@ class get_text_data:
             },
         }
     CATEGORY = CATEGORY_NAME
-    RETURN_TYPES = ("STRING", "STRING", "INT", "STRING", "INT",)
-    RETURN_NAMES = ("language", "words", "word_number",
+    RETURN_TYPES = ("STRING", "INT", "STRING", "INT", "STRING", "INT",)
+    RETURN_NAMES = ("language", "character_length", "words", "word_number",
                     "symbols", "symbol_number")
     FUNCTION = "get_language"
 
     def get_language(self, text):
         language, _ = obtain_language(text)
-        characters_length = len(text)
         words = re.findall(r'\b\w+\b', text)
         word_number = len(words)
         symbols = re.findall(r'[^\w\s]', text)
         symbol_number = len(symbols)
-        return (language, words, word_number, symbols, symbol_number)
+        return (language, len(text), words, word_number, symbols, symbol_number)
 
 
 class remove_blank_space:
+    DESCRIPTION = """
+    Remove silent audio data (for speech-to-text preprocessing).
+        Parameters:
+        -threshold: Audio data with absolute values below this threshold will be removed.
+        -time_length: Limit the processing length to save time.
+
+    去除静音音频数据(用于音频转文字预处理)。\
+        参数: \
+        -threshold: 低于该阈值的绝对值音频数据都将被移除\
+        -time_length: 限制处理长度，可节省时间。\
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -624,17 +797,61 @@ class remove_blank_space:
         return new_audio
 
 
+class multilingual_slice:
+    DESCRIPTION = """
+    Divide natural language text into multiple segments according to commas/periods, etc., 
+    and merge each segment to a specified length (built-in feature of MaskGCT Run V2).
+        Parameters:
+          -language: Language selection (the reading speed varies for the same paragraph in different languages, 
+                and the cutting length will be automatically adjusted through language detection), 
+                choose Auto for automatic language recognition.
+          -text_slice_length: Maximum character length, the length of the combined segments will not exceed this value.
+        Output:
+          -sentence: Short sentences divided by punctuation marks (text list).
+          -sentence_number: The number of divided sentences.
+          -length_sentence: Short sentences recombined to the specified length after division (text list).
+          -length_sentence_n: The number of sentences recombined to the specified length after division.
+
+    将自然语言文本按照逗号/句号等分成多个片段，并将每个片段合并到指定长度(MaskGCT Run V2内置功能)。
+        参数：
+        -language: 语言选择(同一段话不同语言的阅读速度不同，将通过语言自动调整切割长度), 选Auto自动识别语言。
+        -text_slice_length: 最大字符长度，片段组合的长度不会超过此值。
+        输出：
+        -sentence: 按标点符号分割后的短句(文本列表)。
+        -sentence_number: 分割后的句子数量。
+        -length_sentence: 分割后重新组合到指定长度后的短句(文本列表)。
+        -length_sentence_n: 分割后重新组合到指定长度后的句子数量。
+    """
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "text": ("STRING", {"default": "We do not break. We never give in. We never back down."}),
+                "language": (["Auto", "en", "zh", "ja", "fr", "ko", "de",], {"default": "Auto"}),
+                "text_slice_length": ("INT", {"default": 100, "min": 0, "max": 8192}),
+            },
+        }
+    CATEGORY = CATEGORY_NAME
+    RETURN_TYPES = ("STRING","INT","STRING","INT")
+    RETURN_NAMES = ("sentence","sentence_number","length_sentence","length_sentence_n",)
+    FUNCTION = "multilingual_slice"
+
+    def multilingual_slice(self, text, language, text_slice_length):
+        if language == "Auto":
+            language = None
+        sentence, length_sentence = slice_combination(text, text_slice_length, language)
+        return (sentence,len(sentence),length_sentence,len(text))
+
+
 NODE_CLASS_MAPPINGS = {
     # MaskGCT/MaskGCT_Load
     "load_maskgct_model": load_maskgct_model,
     "load_w2vbert_model": load_w2vbert_model,
     "maskgct_pipeline": maskgct_pipeline,
-    "sample_audio": sample_audio,
     "from_path_load_audio": from_path_load_audio,
     # MaskGCT
     "maskgct_run_v2": maskgct_run_v2,
     "maskgct_setting": maskgct_setting,
-    "w2vbert_setting": w2vbert_setting,
     # MaskGCT/Convert_txt
     "whisper_large_v3": whisper_large_v3,
     # MaskGCT/Audio_Edit
@@ -643,6 +860,7 @@ NODE_CLASS_MAPPINGS = {
     "get_audio_data": get_audio_data,
     "get_text_data": get_text_data,
     "remove_blank_space": remove_blank_space,
+    "multilingual_slice": multilingual_slice,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -650,12 +868,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "load_maskgct_model": "Load MaskGCT Model",
     "load_w2vbert_model": "Load W2VBert Model",
     "maskgct_pipeline": "MaskGCT Pipeline",
-    "sample_audio": "Sample Audio",
     "from_path_load_audio": "Load Audio from Path",
     # MaskGCT
     "maskgct_run_v2": "MaskGCT Run V2",
     "maskgct_setting": "MaskGCT Setting",
-    "w2vbert_setting": "W2VBert Setting",
     # MaskGCT/Convert_txt
     "whisper_large_v3": "Speech Recognition-whisper_large_v3",
     # MaskGCT/Audio_Edit
@@ -664,4 +880,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "get_audio_data": "Get Audio Data",
     "get_text_data": "Get Text Data",
     "remove_blank_space": "Remove Blank Space",
+    "multilingual_slice": "Multilingual Slice",
 }
