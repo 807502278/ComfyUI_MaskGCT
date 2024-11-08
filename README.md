@@ -26,6 +26,11 @@ Waiting for updates:
 4. Change whisper-large-v3-turbo to non networked.
 
 2024/11/07: 
+1. Fix **Speech Recognition** Node: error：...Input cannot be multi-channel...
+2. Add a missing dependency.
+3. Delete unnecessary files.
+
+2024/11/07: 
 1. Unlimited text length.
 2. streamlined node.
 3. Change **jieba.cache** from system disk to plugin folder.

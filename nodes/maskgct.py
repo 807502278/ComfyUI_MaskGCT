@@ -40,11 +40,12 @@ def audio_to_numpy(audio):
             audio = audio[0]
             logging.warning(
                 "Warning-MaskGCT-Audio_to_Numpy-E01: Audio batch is temporarily not supported, the first audio has been selected")
-        audio = audio.squeeze(0)
+        audio = audio.squeeze()
         audio = np.array(audio.cpu())
     if isinstance(audio, np.ndarray):
-        if len(audio.shape) > 1 and audio.shape[0] > 1:
+        if len(audio.shape) > 1:
             audio = np.mean(audio, axis=0)
+            audio = audio.squeeze()
     else:
         logging.error(
             "Error-MaskGCT-Audio_to_Numpy-E02: unsupported audio type", exc_info=True)
