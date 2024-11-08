@@ -40,6 +40,13 @@ Waiting for updates:
 2024/11/06: 
 1. First submission
 
+## Operation flowchart
+中文：
+![image](https://github.com/user-attachments/assets/ff8e31ed-66d0-4748-bea9-9db3cf55e32b)
+
+English:
+![image](https://github.com/user-attachments/assets/32aa91fa-99f2-496d-b492-920ffe7411ad)
+
 ## Nodes Explanation
 
 #### MaskGCT_Load
