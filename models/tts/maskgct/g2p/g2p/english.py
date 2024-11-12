@@ -6,6 +6,7 @@
 import re
 from unidecode import unidecode
 import inflect
+import sys
 
 """
     Text clean time
@@ -174,12 +175,24 @@ def _english_to_ipa(text):
 
 # special map
 def special_map(text):
-    for regex, replacement in _special_map:
-        regex = regex.replace("|", "\|")
-        while re.search(r"(^|[_|]){}([_|]|$)".format(regex), text):
-            text = re.sub(
-                r"(^|[_|]){}([_|]|$)".format(regex), r"\1{}\2".format(replacement), text
-            )
+    if sys.version_info[1] > 11:
+        for regex, replacement in _special_map:
+            regex = regex.replace("|", r"|")
+            # https://github.com/807502278/ComfyUI_MaskGCT/issues/7
+            # @https://github.com/niknah 2024-11-11 Suitable for Python 3.12
+            while re.search(r"(^|[_|]){}([_|]|$)".format(regex), text):
+                text = re.sub(
+                    r"(^|[_|]){}([_|]|$)".format(
+                        regex), r"\1{}\2".format(replacement), text
+                )
+    else:
+        for regex, replacement in _special_map:
+            regex = regex.replace("|", "\|")
+            while re.search(r"(^|[_|]){}([_|]|$)".format(regex), text):
+                text = re.sub(
+                    r"(^|[_|]){}([_|]|$)".format(
+                        regex), r"\1{}\2".format(replacement), text
+                )
     # text = re.sub(r'([,.!?])', r'|\1', text)
     return text
 
