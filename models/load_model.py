@@ -3,6 +3,12 @@ import os
 from huggingface_hub import hf_hub_download, snapshot_download
 import torch
 
+def has_files_in_dir(dir):
+    for root, dirs, files in os.walk(dir):
+        if files:
+            return True
+    return False
+
 
 def dir_up_level(dir, level=1):
     """
@@ -26,11 +32,10 @@ MODELS_DIR = os.path.join(dir_up_level(_path, 4), "models/maskgct")
 
 MODELS_JIEBA= os.path.join(OBJECT_DIR,'models/jieba')
 
-def load_model_list(repo_id, file_list: list, local_dir=MODELS_DIR, revision: str = None, object_dir=False):
+def load_model_list(repo_id, file_list: list, local_dir=MODELS_DIR, revision: str = None):
     """
      Download the file list of the specified Hugging Face project to a local directory (preserving the original directory structure, 
         and .cache will also be directed to that directory), return a list of paths or the project path.
-
     将指定抱脸项目的文件列表下载到本地目录(会保留原目录结构.cache也会指定到该目录)，返回路径列表或项目路径
     """
     local_dir = os.path.join(local_dir, repo_id.replace("\\", "/"))
@@ -38,37 +43,44 @@ def load_model_list(repo_id, file_list: list, local_dir=MODELS_DIR, revision: st
     dir_list = []
     for name in file_list:
         path_name, model_name = os.path.split(name)
-        # model_dir = os.path.join(local_dir, path_name)
-        print(f"inspect {path_name}...")
-        dir_list.append(
-            hf_hub_download(
-                repo_id,
-                filename=name,
-                cache_dir=cache_dir,
-                local_dir=local_dir,
-                revision=revision
+        file_dir = os.path.join(local_dir, name)
+        if has_files_in_dir(file_dir) or os.path.exists(file_dir):
+            print(f"Loading {name}...")
+            dir_list.append(file_dir)
+        else:
+            print(f"Downloading {path_name}...")
+            dir_list.append(
+                hf_hub_download(
+                    repo_id,
+                    filename=name,
+                    cache_dir=cache_dir,
+                    local_dir=local_dir,
+                    revision=revision
+                )
             )
-        )
-    if object_dir:
-        return local_dir
-    else:
-        return dir_list
+    dir_list.append(local_dir)
+    return dir_list
 
 
 def load_object_dir(repo_id, ignore_patterns: list = None, local_dir=MODELS_DIR, revision: str = None):
     """
      Download the Hugging Face project to a local directory (a new directory with the same name as repo_id will be created, 
         and .cache will also be directed to that directory), return the project path.
-
     将抱脸项目下载到本地目录(会新建repo_id同名目录并将.cache也指定到该目录)，返回项目路径
     """
     local_dir = os.path.join(local_dir, repo_id.replace("\\", "/"))
-    cache_dir = os.path.join(dir_up_level(local_dir), "cache")
-    object_dir = snapshot_download(repo_id,
-                                   ignore_patterns=ignore_patterns,
-                                   cache_dir=cache_dir,
-                                   local_dir=local_dir)
-    return object_dir
+    if has_files_in_dir(local_dir):
+        print(f"Loading {repo_id}...")
+        return local_dir
+    else:
+        cache_dir = os.path.join(dir_up_level(local_dir), "cache")
+        print(f"Downloading {repo_id}...")
+        object_dir = snapshot_download(repo_id,
+                                       ignore_patterns=ignore_patterns,
+                                       cache_dir=cache_dir,
+                                       local_dir=local_dir,
+                                       )
+        return object_dir
 
 
 def get_device_list():
