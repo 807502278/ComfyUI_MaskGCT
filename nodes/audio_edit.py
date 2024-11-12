@@ -61,10 +61,10 @@ class audio_resample:
 
 class audio_scale:
     DESCRIPTION = """
-    Audio speed adjustment
-        Parameter: - scale: Audio speed multiplier, range 0.001-99999
+    Audio time duration adjustment
+        Parameter: - scale: Audio time duration multiplier, range 0.001-99999
     音频速度调整
-        参数: -scale: 音频速度倍数,范围 0.001-99999
+        参数: -scale: 音频时长倍数,范围 0.001-99999
     """
 
     @classmethod

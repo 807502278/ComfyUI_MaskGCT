@@ -20,10 +20,13 @@ windows download [espeak-ng-X64.msi](https://github.com/espeak-ng/espeak-ng/rele
 ## Update Explanation
 
 Waiting for updates:
+1. Audio List Editing (Voice List Extraction/Merging/Splitting/Synthesis)
+2. Custom Delay Synthesis Based on the End Symbols of Language Segments
+
+2024/11/12:
 1. Audio Speed Adjustment
-2. Audio List Editing (Voice List Extraction/Merging/Splitting/Synthesis)
-3. Custom Delay Synthesis Based on the End Symbols of Language Segments
-4. Change whisper-large-v3-turbo to non networked.
+2. Fixed the BUG that requires an internet connection to run even after the model has been downloaded.
+3. Fixed the BUG that prevented g2p from running in the Python 3.12 environment. [Thanks to @niknah](https://github.com/807502278/ComfyUI_MaskGCT/issues/7)
 
 2024/11/07: 
 1. Fix **Speech Recognition** Node: error：...Input cannot be multi-channel...
@@ -153,6 +156,13 @@ Waiting for updates:
       -sentence_number: The number of divided sentences.\
       -length_sentence: Short sentences recombined to the specified length after division (text list).\
       -length_sentence_n: The number of sentences recombined to the specified length after division.
+
+14. **Audio Speed Adjustment**\
+    Audio time duration adjustment.\
+    Parameters:\
+      - scale: Audio time duration multiplier, range 0.001-99999
+
+
 
 ## Model Download
 The model will automatically be downloaded from the source to the comfyui/models/maskgct directory.
