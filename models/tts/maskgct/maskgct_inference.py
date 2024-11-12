@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from models.tts.maskgct.maskgct_utils import *
-from models.load_model import load_model_list
+from models.load_model import load_model_list, load_object_dir
 
 import safetensors
 #import soundfile as sf
@@ -43,7 +43,7 @@ def maskgct_run():
         "s2a_model/s2a_model_1layer/model.safetensors",
         "s2a_model/s2a_model_full/model.safetensors"
     ]
-    semantic_code_ckpt, codec_encoder_ckpt, codec_decoder_ckpt, t2s_model_ckpt, s2a_1layer_ckpt, s2a_full_ckpt = load_model_list(
+    semantic_code_ckpt, codec_encoder_ckpt, codec_decoder_ckpt, t2s_model_ckpt, s2a_1layer_ckpt, s2a_full_ckpt,w2v_bert = load_model_list(
         maskgct_repo_id, file_list=file_list)
 
     # load semantic codec
@@ -75,6 +75,7 @@ def maskgct_run():
         semantic_mean,
         semantic_std,
         device,
+        #w2v_bert,
     )
 
     recovered_audio = maskgct_inference_pipeline.maskgct_inference(

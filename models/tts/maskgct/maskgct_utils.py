@@ -59,8 +59,7 @@ def build_semantic_model(device):
                  "preprocessor_config.json"]
     model_dir = load_model_list(
         "facebook/w2v-bert-2.0", 
-        file_list, 
-        object_dir=True)
+        file_list)[-1]
     semantic_model = Wav2Vec2BertModel.from_pretrained(
         model_dir, local_files_only=True)
     semantic_model.eval()
@@ -72,7 +71,10 @@ def build_semantic_model(device):
     semantic_std = torch.sqrt(stat_mean_var["var"])
     semantic_mean = semantic_mean.to(device)
     semantic_std = semantic_std.to(device)
-    return semantic_model, semantic_mean, semantic_std
+
+    # processor = SeamlessM4TFeatureExtractor.from_pretrained("facebook/w2v-bert-2.0")
+    processor = SeamlessM4TFeatureExtractor.from_pretrained(model_dir, local_files_only=True)
+    return semantic_model, semantic_mean, semantic_std, processor
 
 
 def build_semantic_codec(cfg, device):
@@ -95,20 +97,21 @@ def build_acoustic_codec(cfg, device):
 class MaskGCT_Inference_Pipeline:
     def __init__(
         self,
-        semantic_model,
         semantic_codec,
         codec_encoder,
         codec_decoder,
         t2s_model,
         s2a_model_1layer,
         s2a_model_full,
+        semantic_model,
         semantic_mean,
         semantic_std,
-        device,
+        w2v_bert,
+        device
     ):
-        self.processor = SeamlessM4TFeatureExtractor.from_pretrained(
-            "facebook/w2v-bert-2.0"
-        )
+        # self.processor = SeamlessM4TFeatureExtractor.from_pretrained("facebook/w2v-bert-2.0")
+        self.w2v_bert = w2v_bert
+
         self.semantic_model = semantic_model
         self.semantic_codec = semantic_codec
         self.codec_encoder = codec_encoder
@@ -122,7 +125,7 @@ class MaskGCT_Inference_Pipeline:
 
     @torch.no_grad()
     def extract_features(self, speech):
-        inputs = self.processor(
+        inputs = self.w2v_bert(
             speech, sampling_rate=16000, return_tensors="pt")
         input_features = inputs["input_features"][0]
         attention_mask = inputs["attention_mask"][0]
@@ -197,9 +200,7 @@ class MaskGCT_Inference_Pipeline:
             cfg=cfg,
             rescale_cfg=rescale_cfg,
         )
-
-        print("predict semantic shape", predict_semantic.shape)
-
+        #print("predict semantic shape", predict_semantic.shape)
         combine_semantic_code = torch.cat(
             [semantic_code[:, :], predict_semantic], dim=-1
         )
@@ -273,7 +274,7 @@ class MaskGCT_Inference_Pipeline:
         cfg_s2a=2.5,
         rescale_cfg_s2a=0.75,
     ):
-
+        
         combine_semantic_code, _ = self.text2semantic(
             audio_2[0],
             prompt_text,
