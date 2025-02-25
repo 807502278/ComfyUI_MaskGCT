@@ -8,5 +8,6 @@ pypinyin
 unidecode
 inflect
 LangSegment
-
+transformers<=4.42.4
+numpy==1.26.0
 # typeguard>=4.0.1
