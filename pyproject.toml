@@ -1,0 +1,15 @@
+[project]
+name = "comfyui_maskgct"
+description = "Suitable for Windows - MaskGCT ComfyUI Node Wrapping"
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["json5", "ruamel_yaml", "pyopenjtalk", "pykakasi", "jieba", "cn2an", "pypinyin", "unidecode", "inflect", "LangSegment", "# typeguard>=4.0.1"]
+
+[project.urls]
+Repository = "https://github.com/807502278/ComfyUI_MaskGCT"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI_MaskGCT"
+Icon = ""
