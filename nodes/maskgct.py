@@ -11,9 +11,9 @@ import soundfile as sf
 import safetensors
 import numpy as np
 
-from models.tts.maskgct.maskgct_utils import *
-from models.load_model import load_model_list, get_device_list, OBJECT_DIR
-from models.auto_tool import audio_to_numpy, slice_combination
+from ..models.tts.maskgct.maskgct_utils import *
+from ..models.load_model import load_model_list, get_device_list, OBJECT_DIR
+from ..models.auto_tool import audio_to_numpy, slice_combination
 
 import torchaudio
 import py3langid
